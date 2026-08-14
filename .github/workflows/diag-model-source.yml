@@ -1,0 +1,23 @@
+name: diag-model-source
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - name: bcebos model bucket (404 in smoke test?)
+        run: curl -s -o NUL -w "bcebos UVDoc: %{http_code}\n" "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/UVDoc_infer.tar"
+
+      - name: paddle-inference bucket (works in fetch_deps)
+        run: curl -s -o NUL -w "bcebos paddle lib: %{http_code}\n" -r 0-1024 "https://paddle-inference-lib.bj.bcebos.com/3.3.1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
+
+      - name: huggingface PaddleOCR repo
+        run: curl -s -o NUL -w "hf README: %{http_code}\n" "https://huggingface.co/PaddlePaddle/PaddleOCR/resolve/main/README.md"
+
+      - name: huggingface api (find model paths)
+        run: curl -s "https://huggingface.co/api/models/PaddlePaddle/PaddleOCR" -o hf.json -w "hf api: %{http_code}\n" && powershell -Command "Get-Content hf.json | Select-Object -First 1"
+
+      - name: bcebos verbose (why 404)
+        run: curl -sv -o NUL "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/UVDoc_infer.tar" 2>&1 | Select-String -Pattern "HTTP|error|Location" | Select-Object -First 10

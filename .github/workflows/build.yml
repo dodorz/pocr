@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   DEPS_KEY: paddle-3.3.1-opencv-4.11.0-pdfium-7999
 

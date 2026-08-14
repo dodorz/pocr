@@ -1,0 +1,12 @@
+diff --git a/deploy/cpp_infer/src/pipelines/ocr/result.h b/deploy/cpp_infer/src/pipelines/ocr/result.h
+index 8d3e3ed..1926271 100644
+--- a/deploy/cpp_infer/src/pipelines/ocr/result.h
++++ b/deploy/cpp_infer/src/pipelines/ocr/result.h
+@@ -28,6 +28,7 @@ public:
+   void SaveToImg(const std::string &save_path) override;
+   void Print() const override;
+   void SaveToJson(const std::string &save_path) const override;
++  const OCRPipelineResult &GetResult() const { return pipeline_result_; }
+ 
+ #ifdef USE_FREETYPE
+   static cv::Mat DrawBoxTextFine(const cv::Size &img_ize,

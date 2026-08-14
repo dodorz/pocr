@@ -18,6 +18,17 @@ if not exist "%UPSTREAM%\deploy\cpp_infer\CMakeLists.txt" (
     echo Upstream source already present, skipping.
 )
 
+rem ---- apply local patches (vendor/patches) ----
+echo Applying patches ...
+for %%P in ("%VENDOR%\patches\*.patch") do (
+    git -C "%UPSTREAM%" apply "%%P" 2>nul
+    if errorlevel 1 (
+        rem patch may already be applied; reverse-check to confirm
+        git -C "%UPSTREAM%" apply --reverse --check "%%P" >nul 2>nul
+        if errorlevel 1 goto :fail
+    )
+)
+
 echo.
 echo Upstream src ready: %UPSTREAM%
 exit /b 0

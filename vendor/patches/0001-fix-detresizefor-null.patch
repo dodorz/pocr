@@ -1,0 +1,18 @@
+diff --git a/deploy/cpp_infer/src/modules/text_detection/predictor.cc b/deploy/cpp_infer/src/modules/text_detection/predictor.cc
+index 0337f71..4974cf3 100644
+--- a/deploy/cpp_infer/src/modules/text_detection/predictor.cc
++++ b/deploy/cpp_infer/src/modules/text_detection/predictor.cc
+@@ -40,8 +40,11 @@ absl::Status TextDetPredictor::Build() {
+   resize_param.limit_side_len = params_.limit_side_len;
+   resize_param.limit_type = params_.limit_type;
+   resize_param.max_side_limit = params_.max_side_limit;
+-  resize_param.resize_long =
+-      std::stoi(pre_tfs.at("DetResizeForTest.resize_long"));
++  if (pre_tfs.count("DetResizeForTest.resize_long")) {
++    // PP-OCRv6 model ymls use `DetResizeForTest: null`, key is absent
++    resize_param.resize_long =
++        std::stoi(pre_tfs.at("DetResizeForTest.resize_long"));
++  }
+   Register<DetResizeForTest>("Resize", resize_param);
+   Register<NormalizeImage>("Normalize");
+   Register<ToCHWImage>("ToCHW");

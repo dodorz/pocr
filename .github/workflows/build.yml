@@ -1,0 +1,82 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  DEPS_KEY: paddle-3.3.1-opencv-4.11.0-pdfium-7999
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache build dependencies
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: pocr-deps-${{ env.DEPS_KEY }}
+          restore-keys: |
+            pocr-deps-
+
+      - name: Fetch upstream source (official cpp_infer)
+        shell: cmd
+        run: scripts\fetch_src.bat
+
+      - name: Fetch dependencies (Paddle/OpenCV/PDFium)
+        shell: cmd
+        run: scripts\fetch_deps.bat
+
+      - name: Build (vswhere auto-detects MSVC)
+        shell: cmd
+        run: scripts\build.bat
+
+      - name: Smoke test with tiny models
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force models | Out-Null
+          $base = 'https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0'
+          $models = @(
+            'PP-OCRv6_tiny_det_infer',
+            'PP-OCRv6_tiny_rec_infer',
+            'PP-LCNet_x1_0_doc_ori_infer',
+            'PP-LCNet_x1_0_textline_ori_infer',
+            'UVDoc_infer'
+          )
+          foreach ($m in $models) {
+            curl.exe -fL --retry 3 -o "models\$m.tar" "$base\$m.tar"
+            tar -xf "models\$m.tar" -C models
+          }
+          curl.exe -fL -o test.png 'https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/general_ocr_001.png'
+          & .\build\pocr.exe -M tiny test.png
+          if (-not (Test-Path test.txt)) { throw 'smoke test failed: no output file' }
+          Get-Content test.txt
+
+      - name: Package exe + dll into 7z
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build\pocr.exe dist\
+          Copy-Item build\*.dll dist\
+          $7z = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $7z)) { choco install 7zip -y | Out-Null }
+          & $7z a -t7z pocr-win-x64.7z .\dist\*
+          Get-ChildItem pocr-win-x64.7z | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocr-win-x64
+          path: |
+            pocr-win-x64.7z
+            dist/
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: pocr-win-x64.7z
+          generate_release_notes: true

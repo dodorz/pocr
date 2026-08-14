@@ -21,12 +21,19 @@
 ### 步骤
 
 ```bat
+scripts\fetch_src.bat      :: 拉取官方 PaddleOCR cpp_infer 源码到 vendor/（sparse checkout）
 scripts\fetch_deps.bat     :: 下载 Paddle Inference 3.3.1 / OpenCV 4.11.0 / PDFium 到 third_party/
 scripts\fetch_models.bat   :: 下载 PP-OCRv6 系列 + 辅助模型到 models/
-scripts\build.bat          :: vcvars64 + CMake(Ninja) + 构建，产物 build\pocr.exe
+scripts\build.bat          :: 自动定位 MSVC（vswhere）+ CMake(Ninja) 构建，产物 build\pocr.exe
 ```
 
 > 依赖与模型体积较大（约 1.5GB），首次下载需要一些时间；之后全部离线可用。
+> 新环境 clone 后按顺序跑 `fetch_src` → `fetch_deps` → `fetch_models` → `build` 即可。
+
+## CI / 发布
+
+GitHub Actions（`.github/workflows/build.yml`）：push 到 main 自动构建 + 冒烟测试，并把
+`pocr.exe` 与全部运行库打包为 `pocr-win-x64.7z` 上传为 artifact；打 `v*` tag 时自动发布到 GitHub Release。
 
 ## 用法
 

@@ -9,11 +9,6 @@ set "THIRD=%ROOT%\third_party"
 
 if not exist "%THIRD%" mkdir "%THIRD%"
 
-rem ---- optional aria2 for faster / more reliable downloads ----
-set "DL=curl -fL --retry 8 --retry-delay 3 -C -"
-where aria2c >nul 2>nul
-if %errorlevel%==0 set "DL=aria2c -x 8 -s 8 -k 2M -c --max-tries=0 --retry-wait=5"
-
 rem ============================================================
 rem [1/3] Paddle Inference 3.3.1 (Windows CPU, VS2019, MKL)
 rem ============================================================
@@ -21,7 +16,7 @@ echo [1/3] Paddle Inference 3.3.1 ...
 if exist "%THIRD%\paddle_inference\paddle\include\paddle_inference_api.h" goto :paddle_ok
 if not exist "%THIRD%\paddle_inference.zip" (
     echo   downloading paddle_inference.zip ...
-    %DL% -o "%THIRD%\paddle_inference.zip" "https://paddle-inference-lib.bj.bcebos.com/3.3.1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
+    curl -fL --retry 8 --retry-delay 3 -C - -o "%THIRD%\paddle_inference.zip" "https://paddle-inference-lib.bj.bcebos.com/3.3.1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
     if errorlevel 1 goto :fail
 )
 echo   unpacking ...
@@ -37,7 +32,7 @@ echo [2/3] OpenCV 4.11.0 ...
 if exist "%THIRD%\opencv\opencv\build\x64\vc16\lib\OpenCVConfig.cmake" goto :opencv_ok
 if not exist "%THIRD%\opencv.exe" (
     echo   downloading opencv-4.11.0-windows.exe ...
-    %DL% -o "%THIRD%\opencv.exe" "https://github.com/opencv/opencv/releases/download/4.11.0/opencv-4.11.0-windows.exe"
+    curl -fL --retry 8 --retry-delay 3 -C - -o "%THIRD%\opencv.exe" "https://github.com/opencv/opencv/releases/download/4.11.0/opencv-4.11.0-windows.exe"
     if errorlevel 1 goto :fail
 )
 echo   unpacking ...
@@ -53,7 +48,7 @@ echo [3/3] PDFium ...
 if exist "%THIRD%\pdfium\bin\pdfium.dll" goto :pdfium_ok
 if not exist "%THIRD%\pdfium.tgz" (
     echo   downloading pdfium ...
-    %DL% -o "%THIRD%\pdfium.tgz" "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7999/pdfium-win-x64.tgz"
+    curl -fL --retry 8 --retry-delay 3 -C - -o "%THIRD%\pdfium.tgz" "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7999/pdfium-win-x64.tgz"
     if errorlevel 1 goto :fail
 )
 echo   unpacking ...

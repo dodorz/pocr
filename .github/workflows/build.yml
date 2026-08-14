@@ -48,8 +48,8 @@ jobs:
             'UVDoc_infer'
           )
           foreach ($m in $models) {
-            curl.exe -fL --retry 3 -o "models\$m.tar" "$base\$m.tar"
-            tar -xf "models\$m.tar" -C models
+            curl.exe -fL --retry 3 -o "models/$m.tar" "$base/$m.tar"
+            tar -xf "models/$m.tar" -C models
           }
           curl.exe -fL -o test.png 'https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/general_ocr_001.png'
           & .\build\pocr.exe -M tiny test.png

@@ -1,0 +1,28 @@
+# ---- build output ----
+/build/
+/build_old/
+
+# ---- third-party deps (scripts\fetch_deps.bat) ----
+/third_party/
+
+# ---- OCR models (scripts\fetch_models.bat) ----
+/models/
+
+# ---- official upstream source (scripts\fetch_src.bat) ----
+/vendor/ppocr_upstream/
+
+# ---- OCR output (recognized text files; commit at your discretion) ----
+# (no blanket *.txt rule: it would also match CMakeLists.txt)
+
+# ---- IDE / OS ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini
+
+# ---- temp / debug ----
+debug_*.png
+*.log

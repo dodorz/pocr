@@ -2,6 +2,8 @@ name: diag-model-source
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   diag:

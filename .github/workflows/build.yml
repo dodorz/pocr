@@ -17,6 +17,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cache build dependencies
         uses: actions/cache@v4
@@ -59,6 +61,31 @@ jobs:
           if (-not (Test-Path test.txt)) { throw 'smoke test failed: no output file' }
           Get-Content test.txt
 
+      - name: Generate release changelog
+        id: changelog
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $current = $env:GITHUB_REF_NAME
+          $tags = @(git tag --sort=-version:refname --list 'v*')
+          $index = [Array]::IndexOf($tags, $current)
+          if ($index -lt 0) { throw "Current tag not found: $current" }
+          if ($index + 1 -lt $tags.Count) {
+            $previous = $tags[$index + 1]
+            $range = "$previous..$current"
+          } else {
+            $range = $current
+          }
+          $raw = git --no-pager log --pretty=format:'%s%x1f%b%x1e' $range | Out-String
+          $entries = @($raw -split [char]0x1e |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne '' })
+          $body = ($entries | ForEach-Object { "- " + $_ }) -join "`n"
+          $delimiter = "CHANGELOG_$([guid]::NewGuid().ToString('N'))"
+          "body<<$delimiter" >> $env:GITHUB_OUTPUT
+          $body >> $env:GITHUB_OUTPUT
+          $delimiter >> $env:GITHUB_OUTPUT
+
       - name: Package exe + dll into 7z
         shell: pwsh
         run: |
@@ -83,4 +110,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: pocr-win-x64.7z
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.body }}
+          generate_release_notes: false

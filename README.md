@@ -76,7 +76,7 @@ pocr --download-models --model-size all --download-dir cwd
 
 | 参数 | 说明 | 默认 |
 |---|---|---|
-| `--version` | 显示嵌入的 pocr 版本号并退出 | - |
+| `--version` | 显示 pocr 版本号并退出 | - |
 | `--model` | 模型档位：`tiny` / `small` / `medium` | `small` |
 | `--models-dir` | 模型根目录（识别时使用） | 自动查找 |
 | `--download-models` | 下载模型并退出 | 关 |
@@ -112,6 +112,7 @@ pocr/
 - **官方源码补丁（vendor/ 内，Apache-2.0 允许）**：
   1. `text_detection/predictor.cc`：`DetResizeForTest.resize_long` 对 PP-OCRv6 模型（yml 为 `null`）缺失导致崩溃，改为容错读取
   2. `ocr/result.h`：新增 `GetResult()` getter 暴露识别结果
+- GitHub Release 发布时会按照版本号排序，取当前 tag 的上一个版本 tag，并用两者之间的全部 Git 提交生成 Release 正文；正文只包含提交标题和正文，不包含 Changelog 标题、提交之间的空行、commit hash 和日期，也不会写入构建目录或发布包。
 - **模型目录**：程序依次查找 `pocr.exe` 同级的 `models\`、`%LOCALAPPDATA%\pocr\models\` 和当前工作目录的 `models\`。也可用 `--models-dir DIR` 指定任意位置。若默认位置都没有模型，程序会先让用户选择 `tiny` / `small` / `medium`，再询问是否下载到 `%LOCALAPPDATA%\pocr\models\`。如果通过 `--model` 或 `-M` 指定了档位，则直接按指定档位下载，不再重复询问。
 - 可执行文件同级的 `configs\OCR.yaml` 是运行必需的流水线配置。发布包已包含该文件；不要只复制 `pocr.exe` 和 DLL。如需自定义位置，可使用 `--pipeline-config <文件路径>`。
 - **oneDNN 默认关闭**：Paddle 3.3.1 的 oneDNN 后端对 PP-OCRv6 模型存在兼容问题（`ConvertPirAttribute2RuntimeAttribute` 不支持），纯 paddle 后端稳定；`--mkldnn` 可尝试开启

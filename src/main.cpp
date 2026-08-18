@@ -172,7 +172,24 @@ bool EnsureModels(std::string &models_dir) {
   }
 
   std::cerr << "OCR models were not found in the standard locations.\n"
-            << "Download the required " << FLAGS_model
+            << "Choose model size [tiny/small/medium] (default: "
+            << FLAGS_model << "): ";
+  std::string choice;
+  std::getline(std::cin, choice);
+  if (!choice.empty()) FLAGS_model = choice;
+  if (FLAGS_model != "tiny" && FLAGS_model != "small" &&
+      FLAGS_model != "medium") {
+    std::cerr << "error: invalid model size: " << FLAGS_model
+              << ". Choose tiny, small, or medium.\n";
+    return false;
+  }
+
+  // Re-resolve after the user chooses the model size: another standard
+  // location may already contain the selected model.
+  models_dir = ResolveModelsDir();
+  if (HasRequiredModels(models_dir)) return true;
+
+  std::cerr << "Download the " << FLAGS_model
             << " models to %LOCALAPPDATA%\\pocr\\models now? [Y/n] ";
   std::string answer;
   std::getline(std::cin, answer);

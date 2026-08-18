@@ -68,6 +68,7 @@ pocr -m <dir> --out out\      :: 合并目录结果
 |---|---|---|
 | `--model` | 模型档位：`tiny` / `small` / `medium` | `small` |
 | `--models-dir` | 模型根目录 | `models` |
+| `--pipeline-config FILE` | OCR 流水线配置；默认随程序位于 `configs\OCR.yaml` | 自动 |
 | `--lang` | 识别语言（`ch` / `en` / ...） | `ch` |
 | `--out DIR` | 输出目录 | 与输入同目录 |
 | `--merge` | 合并为单个 txt | 关 |
@@ -97,6 +98,7 @@ pocr/
 - **官方源码补丁（vendor/ 内，Apache-2.0 允许）**：
   1. `text_detection/predictor.cc`：`DetResizeForTest.resize_long` 对 PP-OCRv6 模型（yml 为 `null`）缺失导致崩溃，改为容错读取
   2. `ocr/result.h`：新增 `GetResult()` getter 暴露识别结果
+- 可执行文件同级的 `configs\OCR.yaml` 是运行必需的流水线配置。发布包已包含该文件；不要只复制 `pocr.exe` 和 DLL。如需自定义位置，可使用 `--pipeline-config <文件路径>`。
 - **oneDNN 默认关闭**：Paddle 3.3.1 的 oneDNN 后端对 PP-OCRv6 模型存在兼容问题（`ConvertPirAttribute2RuntimeAttribute` 不支持），纯 paddle 后端稳定；`--mkldnn` 可尝试开启
 - 构建必须整体 `/MT`（Paddle 预编译静态三方库是 /MT），与 `paddle_inference.dll`（自带 /MD CRT）共存
 - PDF 页渲染到系统临时目录，识别后自动清理（`PCOR_KEEP_TMP=1` 可保留排查）

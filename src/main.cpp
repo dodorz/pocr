@@ -23,6 +23,9 @@
 
 DEFINE_string(model, "small", "Model tier: tiny / small / medium.");
 DEFINE_string(models_dir, "models", "Root directory of OCR model packages.");
+DEFINE_string(pipeline_config, "",
+              "Path to the PaddleX OCR pipeline config (default: "
+              "<pocr.exe dir>/configs/OCR.yaml).");
 DEFINE_bool(mkldnn, false,
             "Enable oneDNN/MKLDNN acceleration (can be incompatible with "
             "PP-OCRv6 models on some Paddle versions).");
@@ -62,6 +65,37 @@ bool HasExt(const std::string &path, const std::vector<std::string> &exts) {
 
 std::string ModelDir(const std::string &root, const std::string &name) {
   return (fs::path(root) / name).string();
+}
+
+// The upstream C++ API normally locates this file through __FILE__. That only
+// works in a source checkout, not in the standalone release archive.
+fs::path ExecutableDir() {
+  std::vector<wchar_t> path(MAX_PATH);
+  const DWORD length = GetModuleFileNameW(nullptr, path.data(),
+                                           static_cast<DWORD>(path.size()));
+  if (length == 0 || length == path.size()) return {};
+  return fs::path(std::wstring(path.data(), length)).parent_path();
+}
+
+std::string ResolvePipelineConfig() {
+  if (!FLAGS_pipeline_config.empty()) {
+    if (fs::is_regular_file(FLAGS_pipeline_config)) return FLAGS_pipeline_config;
+    std::cerr << "error: pipeline config does not exist: "
+              << FLAGS_pipeline_config << "\n";
+    return {};
+  }
+
+  const fs::path exe_config = ExecutableDir() / "configs" / "OCR.yaml";
+  if (fs::is_regular_file(exe_config)) return exe_config.string();
+
+  // Also allow an unpacked config directory when pocr.exe is invoked via PATH.
+  const fs::path cwd_config = fs::path("configs") / "OCR.yaml";
+  if (fs::is_regular_file(cwd_config)) return cwd_config.string();
+
+  std::cerr << "error: OCR pipeline config not found. Expected " << exe_config
+            << "; reinstall the complete pocr package or pass "
+               "--pipeline-config <path-to-OCR.yaml>.\n";
+  return {};
 }
 
 PaddleOCRParams BuildParams() {
@@ -228,7 +262,11 @@ int main(int argc, char *argv[]) {
   }
 
   // Build OCR engine once (all models loaded here)
-  PaddleOCR ocr(BuildParams());
+  PaddleOCRParams params = BuildParams();
+  const std::string pipeline_config = ResolvePipelineConfig();
+  if (pipeline_config.empty()) return 1;
+  params.paddlex_config = pipeline_config;
+  PaddleOCR ocr(params);
 
   // Batch predict all images (models loaded once)
   std::vector<std::unique_ptr<BaseCVResult>> results;

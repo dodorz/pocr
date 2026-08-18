@@ -189,10 +189,21 @@ list(REMOVE_ITEM OFFICIAL_SRC "${PPOCR_CPP_INFER_DIR}/cli.cc")
 add_executable(${DEMO_NAME} ${OUR_SRC} ${OFFICIAL_SRC})
 target_link_libraries(${DEMO_NAME} ${DEPS})
 
+set(PCOR_BIN_DIR "$<TARGET_FILE_DIR:${DEMO_NAME}>")
+
+# The upstream C++ API resolves this from __FILE__, which is invalid after the
+# executable is packaged without the source tree. Keep a runtime copy next to
+# pocr.exe; src/main.cpp passes this path to PaddleOCR explicitly.
+add_custom_command(TARGET ${DEMO_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PCOR_BIN_DIR}/configs"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PPOCR_CPP_INFER_DIR}/src/configs/OCR.yaml"
+        "${PCOR_BIN_DIR}/configs/OCR.yaml"
+)
+
 # ---------------------------------------------------------------------------
 # Copy runtime DLLs next to the exe
 # ---------------------------------------------------------------------------
-set(PCOR_BIN_DIR "$<TARGET_FILE_DIR:${DEMO_NAME}>")
 if (WIN32)
     add_custom_command(TARGET ${DEMO_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

@@ -65,6 +65,7 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item build\pocr.exe dist\
           Copy-Item build\*.dll dist\
+          Copy-Item build\configs dist\configs -Recurse
           $7z = 'C:\Program Files\7-Zip\7z.exe'
           if (-not (Test-Path $7z)) { choco install 7zip -y | Out-Null }
           & $7z a -t7z pocr-win-x64.7z .\dist\*

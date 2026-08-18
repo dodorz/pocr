@@ -98,6 +98,46 @@ std::string ResolvePipelineConfig() {
   return {};
 }
 
+void PrintHelp() {
+  std::cout
+      << "pocr - local OCR command-line tool\n\n"
+      << "Usage:\n"
+      << "  pocr [options] <image|pdf|dir> [more inputs...]\n"
+      << "  pocr [options] --clipboard\n\n"
+      << "Options:\n"
+      << "  --model tiny|small|medium   OCR model tier (default: small)\n"
+      << "  --models-dir DIR            Model root directory (default: models)\n"
+      << "  --pipeline-config FILE      OCR pipeline YAML path\n"
+      << "  --lang LANG                 Recognition language (default: ch)\n"
+      << "  --cpu-threads N             CPU inference threads (default: 8)\n"
+      << "  --out DIR                   Output directory\n"
+      << "  --merge                     Merge results into pocr_output.txt\n"
+      << "  --clipboard                 Read an image from the clipboard\n"
+      << "  --to-clipboard              Write recognized text to the clipboard\n"
+
+      << "  --mkldnn                    Enable oneDNN acceleration\n\n"
+      << "Short options:\n"
+      << "  -c  same as --clipboard\n"
+      << "  -t  same as --to-clipboard\n"
+      << "  -m  same as --merge\n"
+      << "  -M  same as --model\n"
+      << "  -ct / -cmt  short boolean options can be combined\n\n"
+      << "Examples:\n"
+      << "  pocr image.png\n"
+      << "  pocr -ct\n"
+      << "  pocr -M tiny image.png --out results\n"
+      << "  pocr folder --merge --out results\n";
+}
+
+bool IsHelpRequest(int argc, char *argv[]) {
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--help" || std::string(argv[i]) == "-h") {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool IsShortFlagCluster(const std::string &arg) {
   if (arg.size() < 3 || arg[0] != '-' || arg[1] == '-') return false;
   return std::all_of(arg.begin() + 1, arg.end(), [](char c) {
@@ -238,6 +278,11 @@ int main(int argc, char *argv[]) {
       "  -m          merge results into one txt (--merge)\n"
       "  -M <tier>   model tier: tiny/small/medium (--model)\n"
       "  -c/-t/-m can be combined, e.g. -ct");
+
+  if (IsHelpRequest(argc, argv)) {
+    PrintHelp();
+    return 0;
+  }
 
   std::vector<std::string> expanded_args;
   std::vector<char *> expanded_argv;

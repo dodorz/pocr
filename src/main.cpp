@@ -102,15 +102,12 @@ bool HasRequiredModels(const fs::path &models_dir) {
 }
 
 std::string ResolveModelsDir() {
-  // In a release package, models are installed next to pocr.exe. Keep the
-  // source-tree layout working as well: build/pocr.exe -> ../models.
+  // In a release package, models are installed next to pocr.exe.
   if (FLAGS_models_dir == "models") {
     const fs::path exe_models = ExecutableDir() / "models";
-    const fs::path source_models = ExecutableDir().parent_path() / "models";
     const fs::path local_models = LocalAppDataModelsDir();
     const fs::path cwd_models = fs::path("models");
-    const fs::path candidates[] = {exe_models, source_models, local_models,
-                                   cwd_models};
+    const fs::path candidates[] = {exe_models, local_models, cwd_models};
     for (const auto &candidate : candidates) {
       if (HasRequiredModels(candidate)) return candidate.string();
     }

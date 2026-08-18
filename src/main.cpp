@@ -77,6 +77,23 @@ fs::path ExecutableDir() {
   return fs::path(std::wstring(path.data(), length)).parent_path();
 }
 
+std::string ResolveModelsDir() {
+  // In a release package, models are installed next to pocr.exe. Keep the
+  // source-tree layout working as well: build/pocr.exe -> ../models.
+  if (FLAGS_models_dir == "models") {
+    const fs::path exe_models = ExecutableDir() / "models";
+    if (fs::is_directory(exe_models)) return exe_models.string();
+
+    const fs::path source_models = ExecutableDir().parent_path() / "models";
+    if (fs::is_directory(source_models)) return source_models.string();
+
+    const fs::path cwd_models = fs::path("models");
+    if (fs::is_directory(cwd_models)) return cwd_models.string();
+    return exe_models.string();
+  }
+  return FLAGS_models_dir;
+}
+
 std::string ResolvePipelineConfig() {
   if (!FLAGS_pipeline_config.empty()) {
     if (fs::is_regular_file(FLAGS_pipeline_config)) return FLAGS_pipeline_config;
@@ -114,7 +131,6 @@ void PrintHelp() {
       << "  --merge                     Merge results into pocr_output.txt\n"
       << "  --clipboard                 Read an image from the clipboard\n"
       << "  --to-clipboard              Write recognized text to the clipboard\n"
-
       << "  --mkldnn                    Enable oneDNN acceleration\n\n"
       << "Short options:\n"
       << "  -c  same as --clipboard\n"
@@ -165,10 +181,10 @@ void ExpandShortFlagClusters(int &argc, char **&argv,
   argv = pointers.data();
 }
 
-PaddleOCRParams BuildParams() {
+PaddleOCRParams BuildParams(const std::string &models_dir) {
   const std::string det = "PP-OCRv6_" + FLAGS_model + "_det";
   const std::string rec = "PP-OCRv6_" + FLAGS_model + "_rec";
-  const std::string &mdir = FLAGS_models_dir;
+  const std::string &mdir = models_dir;
 
   PaddleOCRParams p;
   p.doc_orientation_classify_model_name = "PP-LCNet_x1_0_doc_ori";
@@ -339,7 +355,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Build OCR engine once (all models loaded here)
-  PaddleOCRParams params = BuildParams();
+  PaddleOCRParams params = BuildParams(ResolveModelsDir());
   const std::string pipeline_config = ResolvePipelineConfig();
   if (pipeline_config.empty()) return 1;
   params.paddlex_config = pipeline_config;

@@ -291,6 +291,7 @@ int main(int argc, char *argv[]) {
 
   // Output
   std::string merged;
+  std::string clipboard_text;
   std::string out_dir = FLAGS_out;
   if (!out_dir.empty()) {
     fs::create_directories(out_dir, ec);
@@ -299,11 +300,15 @@ int main(int argc, char *argv[]) {
   for (const auto &item : items) {
     if (!merged.empty()) merged += "\n";
     merged += "===== " + item.display + " =====\n";
-    for (const auto &l : item.lines) merged += l + "\n";
+    if (!clipboard_text.empty()) clipboard_text += "\n";
+    for (const auto &l : item.lines) {
+      merged += l + "\n";
+      clipboard_text += l + "\n";
+    }
   }
 
   if (FLAGS_to_clipboard) {
-    if (!ClipboardWriteText(merged)) {
+    if (!ClipboardWriteText(clipboard_text)) {
       std::cerr << "error: failed to write clipboard\n";
     }
   }

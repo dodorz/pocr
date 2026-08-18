@@ -3,6 +3,7 @@
 #include <gflags/gflags.h>
 
 #include <windows.h>
+#include <shlobj.h>
 
 #include <algorithm>
 #include <cctype>
@@ -82,6 +83,21 @@ fs::path ExecutableDir() {
                                            static_cast<DWORD>(path.size()));
   if (length == 0 || length == path.size()) return {};
   return fs::path(std::wstring(path.data(), length)).parent_path();
+}
+
+fs::path DocumentsDir() {
+  PWSTR path = nullptr;
+  const HRESULT result =
+      SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &path);
+  if (SUCCEEDED(result) && path != nullptr) {
+    fs::path documents(path);
+    CoTaskMemFree(path);
+    return documents;
+  }
+  if (path != nullptr) CoTaskMemFree(path);
+  std::cerr << "[warn] pocr: cannot locate Documents folder; using current "
+               "directory\n";
+  return fs::current_path();
 }
 
 fs::path LocalAppDataModelsDir() {
@@ -598,8 +614,13 @@ int main(int argc, char *argv[]) {
       if (stem == "(clipboard)") stem = "clipboard";
       fs::path out_file;
       if (out_dir.empty()) {
-        fs::path parent = src.parent_path();
-        if (parent == tmp_dir) parent = fs::current_path();
+        fs::path parent;
+        if (from_clipboard) {
+          parent = DocumentsDir();
+        } else {
+          parent = src.parent_path();
+          if (parent == tmp_dir) parent = fs::current_path();
+        }
         out_file = parent / (stem + ".txt");
       } else {
         out_file = fs::path(out_dir) / (stem + ".txt");

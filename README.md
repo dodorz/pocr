@@ -115,6 +115,7 @@ pocr/
 - 可执行文件同级的 `configs\OCR.yaml` 是运行必需的流水线配置。发布包已包含该文件；不要只复制 `pocr.exe` 和 DLL。如需自定义位置，可使用 `--pipeline-config <文件路径>`。
 - **oneDNN 默认关闭**：Paddle 3.3.1 的 oneDNN 后端对 PP-OCRv6 模型存在兼容问题（`ConvertPirAttribute2RuntimeAttribute` 不支持），纯 paddle 后端稳定；`--mkldnn` 可尝试开启
 - 构建必须整体 `/MT`（Paddle 预编译静态三方库是 /MT），与 `paddle_inference.dll`（自带 /MD CRT）共存
+- 剪贴板识别未指定 `--out` 时，结果写入 Windows“文档”目录（通过 `SHGetKnownFolderPath(FOLDERID_Documents)` 获取）。
 - PDF 页渲染到系统临时目录，识别后自动清理（`PCOR_KEEP_TMP=1` 可保留排查）
 
 ## License

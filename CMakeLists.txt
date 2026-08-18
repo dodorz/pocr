@@ -107,7 +107,7 @@ set(DEPS
     ${PADDLE_LIB}/paddle/lib/paddle_inference.lib
     ${MATH_LIB} ${MKLDNN_LIB}
     glog gflags_static libprotobuf xxhash yaml-cpp
-    shlwapi)
+    shlwapi shell32)
 if (EXISTS "${PADDLE_LIB}/third_party/install/snappy/lib")
     set(DEPS ${DEPS} snappy)
 endif()

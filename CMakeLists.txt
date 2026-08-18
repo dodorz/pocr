@@ -1,6 +1,21 @@
 cmake_minimum_required(VERSION 3.14)
 project(pocr CXX)
 
+set(POCR_VERSION "dev" CACHE STRING "pocr version embedded in the executable")
+find_package(Git QUIET)
+if(GIT_FOUND AND POCR_VERSION STREQUAL "dev")
+  execute_process(
+      COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      OUTPUT_VARIABLE POCR_GIT_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE POCR_GIT_RESULT)
+  if(POCR_GIT_RESULT EQUAL 0 AND NOT POCR_GIT_VERSION STREQUAL "")
+    set(POCR_VERSION "${POCR_GIT_VERSION}")
+  endif()
+endif()
+message(STATUS "pocr version: ${POCR_VERSION}")
+
 set(DEMO_NAME "pocr")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -187,6 +202,8 @@ file(GLOB OUR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(REMOVE_ITEM OFFICIAL_SRC "${PPOCR_CPP_INFER_DIR}/cli.cc")
 
 add_executable(${DEMO_NAME} ${OUR_SRC} ${OFFICIAL_SRC})
+target_compile_definitions(${DEMO_NAME} PRIVATE
+    "POCR_VERSION=\"${POCR_VERSION}\"")
 target_link_libraries(${DEMO_NAME} ${DEPS})
 
 set(PCOR_BIN_DIR "$<TARGET_FILE_DIR:${DEMO_NAME}>")

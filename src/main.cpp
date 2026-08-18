@@ -18,6 +18,10 @@
 
 #include <opencv2/opencv.hpp>
 
+#ifndef POCR_VERSION
+#define POCR_VERSION "dev"
+#endif
+
 #include "clipboard.h"
 #include "pdf_reader.h"
 #include "src/api/pipelines/ocr.h"
@@ -323,6 +327,7 @@ void PrintHelp() {
       << "  --merge                     Merge results into pocr_output.txt\n"
       << "  --clipboard                 Read an image from the clipboard\n"
       << "  --to-clipboard              Write recognized text to the clipboard\n"
+      << "  --version                   Show version and exit\n"
       << "  --mkldnn                    Enable oneDNN acceleration\n\n"
       << "Short options:\n"
       << "  -c  same as --clipboard\n"
@@ -344,6 +349,13 @@ bool IsHelpRequest(int argc, char *argv[]) {
     if (std::string(argv[i]) == "--help" || std::string(argv[i]) == "-h") {
       return true;
     }
+  }
+  return false;
+}
+
+bool IsVersionRequest(int argc, char *argv[]) {
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--version") return true;
   }
   return false;
 }
@@ -499,6 +511,11 @@ int main(int argc, char *argv[]) {
       "  -m          merge results into one txt (--merge)\n"
       "  -M <tier>   model tier: tiny/small/medium (--model)\n"
       "  -c/-t/-m can be combined, e.g. -ct");
+
+  if (IsVersionRequest(argc, argv)) {
+    std::cout << "pocr " << POCR_VERSION << "\n";
+    return 0;
+  }
 
   if (IsHelpRequest(argc, argv)) {
     PrintHelp();

@@ -76,6 +76,7 @@ pocr --download-models --model-size all --download-dir cwd
 
 | 参数 | 说明 | 默认 |
 |---|---|---|
+| `--version` | 显示嵌入的 pocr 版本号并退出 | - |
 | `--model` | 模型档位：`tiny` / `small` / `medium` | `small` |
 | `--models-dir` | 模型根目录（识别时使用） | 自动查找 |
 | `--download-models` | 下载模型并退出 | 关 |

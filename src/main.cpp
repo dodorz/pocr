@@ -161,7 +161,7 @@ bool DownloadModels(const fs::path &models_dir) {
   return HasRequiredModels(models_dir);
 }
 
-bool EnsureModels(std::string &models_dir) {
+bool EnsureModels(std::string &models_dir, bool model_explicit) {
   if (HasRequiredModels(models_dir)) return true;
 
   // An explicitly supplied directory is never populated implicitly.
@@ -171,21 +171,23 @@ bool EnsureModels(std::string &models_dir) {
     return false;
   }
 
-  std::cerr << "OCR models were not found in the standard locations.\n"
-            << "Choose model size [tiny/small/medium] (default: "
-            << FLAGS_model << "): ";
-  std::string choice;
-  std::getline(std::cin, choice);
-  if (!choice.empty()) FLAGS_model = choice;
-  if (FLAGS_model != "tiny" && FLAGS_model != "small" &&
-      FLAGS_model != "medium") {
-    std::cerr << "error: invalid model size: " << FLAGS_model
-              << ". Choose tiny, small, or medium.\n";
-    return false;
+  if (!model_explicit) {
+    std::cerr << "OCR models were not found in the standard locations.\n"
+              << "Choose model size [tiny/small/medium] (default: "
+              << FLAGS_model << "): ";
+    std::string choice;
+    std::getline(std::cin, choice);
+    if (!choice.empty()) FLAGS_model = choice;
+    if (FLAGS_model != "tiny" && FLAGS_model != "small" &&
+        FLAGS_model != "medium") {
+      std::cerr << "error: invalid model size: " << FLAGS_model
+                << ". Choose tiny, small, or medium.\n";
+      return false;
+    }
   }
 
-  // Re-resolve after the user chooses the model size: another standard
-  // location may already contain the selected model.
+  // Re-resolve after a possible model-size choice: another standard location
+  // may already contain the selected model.
   models_dir = ResolveModelsDir();
   if (HasRequiredModels(models_dir)) return true;
 
@@ -256,6 +258,17 @@ void PrintHelp() {
 bool IsHelpRequest(int argc, char *argv[]) {
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--help" || std::string(argv[i]) == "-h") {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HasModelOption(int argc, char *argv[]) {
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg(argv[i]);
+    if (arg == "--model" || arg.rfind("--model=", 0) == 0 ||
+        arg == "-M" || (arg.size() > 2 && arg.rfind("-M", 0) == 0)) {
       return true;
     }
   }
@@ -408,6 +421,8 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  const bool model_explicit = HasModelOption(argc, argv);
+
   std::vector<std::string> expanded_args;
   std::vector<char *> expanded_argv;
   ExpandShortFlagClusters(argc, argv, expanded_args, expanded_argv);
@@ -464,7 +479,7 @@ int main(int argc, char *argv[]) {
 
   // Build OCR engine once (all models loaded here)
   std::string models_dir = ResolveModelsDir();
-  if (!EnsureModels(models_dir)) return 1;
+  if (!EnsureModels(models_dir, model_explicit)) return 1;
   PaddleOCRParams params = BuildParams(models_dir);
   const std::string pipeline_config = ResolvePipelineConfig();
   if (pipeline_config.empty()) return 1;

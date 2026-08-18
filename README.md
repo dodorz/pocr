@@ -70,7 +70,7 @@ pocr --download-models --model-size tiny
 pocr --download-models --model-size all --download-dir cwd
 ```
 
-不指定 `--model-size` 时，程序会交互式提示选择 `tiny`、`small`、`medium` 或 `all`。
+不指定 `--model-size` 时，程序会交互式提示选择 `tiny`、`small`、`medium` 或 `all`。下载并成功解压后，原始 `.tar` 压缩包会自动移入 Windows 回收站；如果移动失败，会保留文件并输出警告。
 
 ### 常用选项
 

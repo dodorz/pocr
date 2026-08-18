@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <shlobj.h>
+#include <shellapi.h>
 
 #include <algorithm>
 #include <cctype>
@@ -100,6 +101,18 @@ fs::path DocumentsDir() {
   return fs::current_path();
 }
 
+bool MoveToRecycleBin(const fs::path &path) {
+  std::wstring from = path.wstring();
+  from.push_back(L'\0');  // SHFileOperation requires a double-null string.
+  SHFILEOPSTRUCTW operation{};
+  operation.wFunc = FO_DELETE;
+  operation.pFrom = from.c_str();
+  operation.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI |
+                     FOF_SILENT;
+  const int result = SHFileOperationW(&operation);
+  return result == 0 && !operation.fAnyOperationsAborted;
+}
+
 fs::path LocalAppDataModelsDir() {
   std::vector<wchar_t> value(32768);
   const DWORD length = GetEnvironmentVariableW(
@@ -190,6 +203,16 @@ bool DownloadModels(const fs::path &models_dir, const std::string &size) {
     if (std::system(extract.c_str()) != 0) {
       std::cerr << "error: failed to extract " << name << "\n";
       return false;
+    }
+    if (!fs::is_directory(model_dir)) {
+      std::cerr << "error: extraction did not create model directory: "
+                << model_dir << "\n";
+      return false;
+    }
+    if (!MoveToRecycleBin(archive)) {
+      std::cerr << "[warn] pocr: could not move downloaded archive to the "
+                   "Recycle Bin: "
+                << archive << "\n";
     }
   }
   return HasModelsForSize(models_dir, size);

@@ -24,6 +24,12 @@
 
 DEFINE_string(model, "small", "Model tier: tiny / small / medium.");
 DEFINE_string(models_dir, "models", "Root directory of OCR model packages.");
+DEFINE_bool(download_models, false,
+            "Download OCR models and exit.");
+DEFINE_string(model_size, "",
+              "Model size to download: tiny / small / medium / all.");
+DEFINE_string(download_dir, "localappdata",
+              "Download destination: localappdata / cwd / PATH.");
 DEFINE_string(pipeline_config, "",
               "Path to the PaddleX OCR pipeline config (default: "
               "<pocr.exe dir>/configs/OCR.yaml).");
@@ -86,19 +92,34 @@ fs::path LocalAppDataModelsDir() {
   return fs::path(std::wstring(value.data(), length)) / "pocr" / "models";
 }
 
-std::vector<std::string> RequiredModelNames() {
-  return {"PP-LCNet_x1_0_doc_ori_infer",
-          "UVDoc_infer",
-          "PP-LCNet_x1_0_textline_ori_infer",
-          "PP-OCRv6_" + FLAGS_model + "_det_infer",
-          "PP-OCRv6_" + FLAGS_model + "_rec_infer"};
+std::vector<std::string> ModelNamesForSize(const std::string &size) {
+  std::vector<std::string> names = {"PP-LCNet_x1_0_doc_ori_infer",
+                                    "UVDoc_infer",
+                                    "PP-LCNet_x1_0_textline_ori_infer"};
+  const std::vector<std::string> sizes =
+      size == "all" ? std::vector<std::string>{"tiny", "small", "medium"}
+                     : std::vector<std::string>{size};
+  for (const auto &model_size : sizes) {
+    names.push_back("PP-OCRv6_" + model_size + "_det_infer");
+    names.push_back("PP-OCRv6_" + model_size + "_rec_infer");
+  }
+  return names;
 }
 
-bool HasRequiredModels(const fs::path &models_dir) {
-  for (const auto &name : RequiredModelNames()) {
+bool IsValidModelSize(const std::string &size) {
+  return size == "tiny" || size == "small" || size == "medium" ||
+         size == "all";
+}
+
+bool HasModelsForSize(const fs::path &models_dir, const std::string &size) {
+  for (const auto &name : ModelNamesForSize(size)) {
     if (!fs::is_directory(models_dir / name)) return false;
   }
   return true;
+}
+
+bool HasRequiredModels(const fs::path &models_dir) {
+  return HasModelsForSize(models_dir, FLAGS_model);
 }
 
 std::string ResolveModelsDir() {
@@ -121,24 +142,21 @@ std::string ResolveModelsDir() {
   return FLAGS_models_dir;
 }
 
-bool DownloadModels(const fs::path &models_dir) {
+bool DownloadModels(const fs::path &models_dir, const std::string &size) {
+  if (!IsValidModelSize(size) || size.empty()) {
+    std::cerr << "error: invalid download model size: " << size
+              << ". Choose tiny, small, medium, or all.\n";
+    return false;
+  }
   if (models_dir.empty()) {
     std::cerr << "error: LOCALAPPDATA is not available; cannot choose a model "
                  "download directory.\n";
     return false;
   }
-  std::error_code ec;
-  fs::create_directories(models_dir, ec);
-  if (ec) {
-    std::cerr << "error: cannot create model directory: " << models_dir
-              << " (" << ec.message() << ")\n";
-    return false;
-  }
-
   const std::string base_url =
       "https://paddle-model-ecology.bj.bcebos.com/"
       "paddlex/official_inference_model/paddle3.0.0/";
-  for (const auto &name : RequiredModelNames()) {
+  for (const auto &name : ModelNamesForSize(size)) {
     const fs::path model_dir = models_dir / name;
     if (fs::is_directory(model_dir)) continue;
     const fs::path archive = models_dir / (name + ".tar");
@@ -158,7 +176,29 @@ bool DownloadModels(const fs::path &models_dir) {
       return false;
     }
   }
-  return HasRequiredModels(models_dir);
+  return HasModelsForSize(models_dir, size);
+}
+
+fs::path ResolveDownloadDir() {
+  if (FLAGS_download_dir == "localappdata") return LocalAppDataModelsDir();
+  if (FLAGS_download_dir == "cwd") return fs::current_path() / "models";
+  return fs::path(FLAGS_download_dir);
+}
+
+bool DownloadModelsCommand() {
+  std::string size = FLAGS_model_size;
+  if (size.empty()) {
+    std::cerr << "Choose model size to download [tiny/small/medium/all]: ";
+    std::getline(std::cin, size);
+  }
+  if (!IsValidModelSize(size)) {
+    std::cerr << "error: invalid download model size: " << size
+              << ". Choose tiny, small, medium, or all.\n";
+    return false;
+  }
+  const fs::path destination = ResolveDownloadDir();
+  std::cout << "Download destination: " << destination << "\n";
+  return DownloadModels(destination, size);
 }
 
 bool EnsureModels(std::string &models_dir, bool model_explicit) {
@@ -201,7 +241,7 @@ bool EnsureModels(std::string &models_dir, bool model_explicit) {
     return false;
   }
   models_dir = LocalAppDataModelsDir().string();
-  return DownloadModels(models_dir);
+  return DownloadModels(models_dir, FLAGS_model);
 }
 
 std::string ResolvePipelineConfig() {
@@ -234,6 +274,9 @@ void PrintHelp() {
       << "Options:\n"
       << "  --model tiny|small|medium   OCR model tier (default: small)\n"
       << "  --models-dir DIR            Model root directory (default: auto)\n"
+      << "  --download-models           Download models and exit\n"
+      << "  --model-size SIZE           Download size: tiny/small/medium/all\n"
+      << "  --download-dir DEST         Download to localappdata/cwd/PATH\n"
       << "  --pipeline-config FILE      OCR pipeline YAML path\n"
       << "  --lang LANG                 Recognition language (default: ch)\n"
       << "  --cpu-threads N             CPU inference threads (default: 8)\n"
@@ -252,7 +295,9 @@ void PrintHelp() {
       << "  pocr image.png\n"
       << "  pocr -ct\n"
       << "  pocr -M tiny image.png --out results\n"
-      << "  pocr folder --merge --out results\n";
+      << "  pocr folder --merge --out results\n"
+      << "  pocr --download-models --model-size tiny\n"
+      << "  pocr --download-models --model-size all --download-dir cwd\n";
 }
 
 bool IsHelpRequest(int argc, char *argv[]) {
@@ -433,6 +478,10 @@ int main(int argc, char *argv[]) {
   if (FLAGS_t) FLAGS_to_clipboard = true;
   if (FLAGS_m) FLAGS_merge = true;
   if (!FLAGS_M.empty()) FLAGS_model = FLAGS_M;
+
+  if (FLAGS_download_models) {
+    return DownloadModelsCommand() ? 0 : 1;
+  }
 
   PdfGlobalInit();
 

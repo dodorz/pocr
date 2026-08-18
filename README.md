@@ -63,12 +63,24 @@ pocr -M tiny <image>          :: 用 tiny 档模型识别
 pocr -m <dir> --out out\      :: 合并目录结果
 ```
 
+模型下载：
+
+```bat
+pocr --download-models --model-size tiny
+pocr --download-models --model-size all --download-dir cwd
+```
+
+不指定 `--model-size` 时，程序会交互式提示选择 `tiny`、`small`、`medium` 或 `all`。
+
 ### 常用选项
 
 | 参数 | 说明 | 默认 |
 |---|---|---|
 | `--model` | 模型档位：`tiny` / `small` / `medium` | `small` |
-| `--models-dir` | 模型根目录 | `models` |
+| `--models-dir` | 模型根目录（识别时使用） | 自动查找 |
+| `--download-models` | 下载模型并退出 | 关 |
+| `--model-size` | 下载档位：`tiny` / `small` / `medium` / `all` | 启动时选择 |
+| `--download-dir` | 下载位置：`localappdata` / `cwd` / 自定义路径 | `localappdata` |
 | `--pipeline-config FILE` | OCR 流水线配置；默认随程序位于 `configs\OCR.yaml` | 自动 |
 | `--lang` | 识别语言（`ch` / `en` / ...） | `ch` |
 | `--out DIR` | 输出目录 | 与输入同目录 |

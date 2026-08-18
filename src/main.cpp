@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -77,21 +78,114 @@ fs::path ExecutableDir() {
   return fs::path(std::wstring(path.data(), length)).parent_path();
 }
 
+fs::path LocalAppDataModelsDir() {
+  std::vector<wchar_t> value(32768);
+  const DWORD length = GetEnvironmentVariableW(
+      L"LOCALAPPDATA", value.data(), static_cast<DWORD>(value.size()));
+  if (length == 0 || length >= value.size()) return {};
+  return fs::path(std::wstring(value.data(), length)) / "pocr" / "models";
+}
+
+std::vector<std::string> RequiredModelNames() {
+  return {"PP-LCNet_x1_0_doc_ori_infer",
+          "UVDoc_infer",
+          "PP-LCNet_x1_0_textline_ori_infer",
+          "PP-OCRv6_" + FLAGS_model + "_det_infer",
+          "PP-OCRv6_" + FLAGS_model + "_rec_infer"};
+}
+
+bool HasRequiredModels(const fs::path &models_dir) {
+  for (const auto &name : RequiredModelNames()) {
+    if (!fs::is_directory(models_dir / name)) return false;
+  }
+  return true;
+}
+
 std::string ResolveModelsDir() {
   // In a release package, models are installed next to pocr.exe. Keep the
   // source-tree layout working as well: build/pocr.exe -> ../models.
   if (FLAGS_models_dir == "models") {
     const fs::path exe_models = ExecutableDir() / "models";
-    if (fs::is_directory(exe_models)) return exe_models.string();
-
     const fs::path source_models = ExecutableDir().parent_path() / "models";
-    if (fs::is_directory(source_models)) return source_models.string();
-
+    const fs::path local_models = LocalAppDataModelsDir();
     const fs::path cwd_models = fs::path("models");
-    if (fs::is_directory(cwd_models)) return cwd_models.string();
-    return exe_models.string();
+    const fs::path candidates[] = {exe_models, source_models, local_models,
+                                   cwd_models};
+    for (const auto &candidate : candidates) {
+      if (HasRequiredModels(candidate)) return candidate.string();
+    }
+    for (const auto &candidate : candidates) {
+      if (fs::is_directory(candidate)) return candidate.string();
+    }
+    // Auto-download uses the per-user location, so it does not require
+    // administrator privileges and does not modify the installation folder.
+    return local_models.string();
   }
   return FLAGS_models_dir;
+}
+
+bool DownloadModels(const fs::path &models_dir) {
+  if (models_dir.empty()) {
+    std::cerr << "error: LOCALAPPDATA is not available; cannot choose a model "
+                 "download directory.\n";
+    return false;
+  }
+  std::error_code ec;
+  fs::create_directories(models_dir, ec);
+  if (ec) {
+    std::cerr << "error: cannot create model directory: " << models_dir
+              << " (" << ec.message() << ")\n";
+    return false;
+  }
+
+  const std::string base_url =
+      "https://paddle-model-ecology.bj.bcebos.com/"
+      "paddlex/official_inference_model/paddle3.0.0/";
+  for (const auto &name : RequiredModelNames()) {
+    const fs::path model_dir = models_dir / name;
+    if (fs::is_directory(model_dir)) continue;
+    const fs::path archive = models_dir / (name + ".tar");
+    const std::string archive_arg = "\"" + archive.string() + "\"";
+    const std::string url_arg = "\"" + base_url + name + ".tar\"";
+    std::cout << "Downloading " << name << "...\n";
+    const std::string download = "curl.exe -fL --retry 3 -o " + archive_arg +
+                                 " " + url_arg;
+    if (std::system(download.c_str()) != 0) {
+      std::cerr << "error: failed to download " << name << "\n";
+      return false;
+    }
+    const std::string extract = "tar.exe -xf " + archive_arg + " -C \"" +
+                                models_dir.string() + "\"";
+    if (std::system(extract.c_str()) != 0) {
+      std::cerr << "error: failed to extract " << name << "\n";
+      return false;
+    }
+  }
+  return HasRequiredModels(models_dir);
+}
+
+bool EnsureModels(std::string &models_dir) {
+  if (HasRequiredModels(models_dir)) return true;
+
+  // An explicitly supplied directory is never populated implicitly.
+  if (FLAGS_models_dir != "models") {
+    std::cerr << "error: required OCR models are missing from: " << models_dir
+              << "\n";
+    return false;
+  }
+
+  std::cerr << "OCR models were not found in the standard locations.\n"
+            << "Download the required " << FLAGS_model
+            << " models to %LOCALAPPDATA%\\pocr\\models now? [Y/n] ";
+  std::string answer;
+  std::getline(std::cin, answer);
+  if (!answer.empty() && answer != "y" && answer != "Y" && answer != "yes" &&
+      answer != "YES") {
+    std::cerr << "Model download cancelled.\n";
+    return false;
+  }
+  models_dir = LocalAppDataModelsDir().string();
+  return DownloadModels(models_dir);
 }
 
 std::string ResolvePipelineConfig() {
@@ -123,7 +217,7 @@ void PrintHelp() {
       << "  pocr [options] --clipboard\n\n"
       << "Options:\n"
       << "  --model tiny|small|medium   OCR model tier (default: small)\n"
-      << "  --models-dir DIR            Model root directory (default: models)\n"
+      << "  --models-dir DIR            Model root directory (default: auto)\n"
       << "  --pipeline-config FILE      OCR pipeline YAML path\n"
       << "  --lang LANG                 Recognition language (default: ch)\n"
       << "  --cpu-threads N             CPU inference threads (default: 8)\n"
@@ -355,7 +449,9 @@ int main(int argc, char *argv[]) {
   }
 
   // Build OCR engine once (all models loaded here)
-  PaddleOCRParams params = BuildParams(ResolveModelsDir());
+  std::string models_dir = ResolveModelsDir();
+  if (!EnsureModels(models_dir)) return 1;
+  PaddleOCRParams params = BuildParams(models_dir);
   const std::string pipeline_config = ResolvePipelineConfig();
   if (pipeline_config.empty()) return 1;
   params.paddlex_config = pipeline_config;

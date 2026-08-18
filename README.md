@@ -58,6 +58,7 @@ pocr --clipboard --to-clipboard        :: 识别剪贴板图片并把文本写�
 
 ```bat
 pocr -c -t                    :: 识别剪贴板图片并把文本写回剪贴板
+pocr -ct                      :: 同上；`-c`、`-t`、`-m` 可组合
 pocr -M tiny <image>          :: 用 tiny 档模型识别
 pocr -m <dir> --out out\      :: 合并目录结果
 ```

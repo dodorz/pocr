@@ -98,6 +98,33 @@ std::string ResolvePipelineConfig() {
   return {};
 }
 
+bool IsShortFlagCluster(const std::string &arg) {
+  if (arg.size() < 3 || arg[0] != '-' || arg[1] == '-') return false;
+  return std::all_of(arg.begin() + 1, arg.end(), [](char c) {
+    return c == 'c' || c == 't' || c == 'm';
+  });
+}
+
+void ExpandShortFlagClusters(int &argc, char **&argv,
+                             std::vector<std::string> &storage,
+                             std::vector<char *> &pointers) {
+  storage.reserve(argc);
+  for (int i = 0; i < argc; ++i) {
+    const std::string arg(argv[i]);
+    if (IsShortFlagCluster(arg)) {
+      for (size_t j = 1; j < arg.size(); ++j) {
+        storage.push_back("-" + arg.substr(j, 1));
+      }
+    } else {
+      storage.push_back(arg);
+    }
+  }
+  pointers.reserve(storage.size());
+  for (auto &arg : storage) pointers.push_back(arg.data());
+  argc = static_cast<int>(pointers.size());
+  argv = pointers.data();
+}
+
 PaddleOCRParams BuildParams() {
   const std::string det = "PP-OCRv6_" + FLAGS_model + "_det";
   const std::string rec = "PP-OCRv6_" + FLAGS_model + "_rec";
@@ -209,7 +236,12 @@ int main(int argc, char *argv[]) {
       "  -c          read image from clipboard (--clipboard)\n"
       "  -t          write recognized text to clipboard (--to-clipboard)\n"
       "  -m          merge results into one txt (--merge)\n"
-      "  -M <tier>   model tier: tiny/small/medium (--model)");
+      "  -M <tier>   model tier: tiny/small/medium (--model)\n"
+      "  -c/-t/-m can be combined, e.g. -ct");
+
+  std::vector<std::string> expanded_args;
+  std::vector<char *> expanded_argv;
+  ExpandShortFlagClusters(argc, argv, expanded_args, expanded_argv);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   // Apply single-letter aliases

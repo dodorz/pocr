@@ -10,9 +10,11 @@
 void PdfGlobalInit() { FPDF_InitLibrary(); }
 void PdfGlobalShutdown() { FPDF_DestroyLibrary(); }
 
-bool PdfRenderPages(const std::string &pdf_path,
+bool PdfRenderPages(const std::string &pdf_path, double scale,
                     std::vector<cv::Mat> &out_pages) {
   out_pages.clear();
+  if (scale < 1.0) scale = 1.0;
+  if (scale > 4.0) scale = 4.0;
   FPDF_DOCUMENT doc =
       FPDF_LoadDocument(pdf_path.c_str(), /*password=*/nullptr);
   if (!doc) {
@@ -25,7 +27,6 @@ bool PdfRenderPages(const std::string &pdf_path,
       std::cerr << "[warn] pocr: cannot load PDF page " << i + 1 << "\n";
       continue;
     }
-    const double scale = 2.0;  // 2x for better OCR accuracy
     const int width = static_cast<int>(FPDF_GetPageWidth(page) * scale);
     const int height = static_cast<int>(FPDF_GetPageHeight(page) * scale);
 

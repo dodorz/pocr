@@ -1,0 +1,52 @@
+pipeline_name: OCR
+
+text_type: general
+
+use_doc_preprocessor: True
+use_textline_orientation: True
+
+SubPipelines:
+  DocPreprocessor:
+    pipeline_name: doc_preprocessor
+    use_doc_orientation_classify: True
+    use_doc_unwarping: True
+    SubModules:
+      DocOrientationClassify:
+        module_name: doc_text_orientation
+        model_name: PP-LCNet_x1_0_doc_ori
+        model_dir: null
+      DocUnwarping:
+        module_name: image_unwarping
+        model_name: UVDoc
+        model_dir: null
+
+SubModules:
+  TextDetection:
+    module_name: text_detection
+    model_name: PP-OCRv6_medium_det
+    model_dir: null
+    # PP-OCRv6 detection models are trained on 640x640 crops, i.e. the long
+    # side of the page is expected to be ~960 px (see PaddleX
+    # _TEXT_DET_MAX_LIMIT_MODELS).  The upstream cpp_infer config still ships
+    # the PP-OCRv5 values (limit_side_len: 64 / limit_type: min), which makes
+    # the detector run on the *native* resolution of the input and therefore
+    # far outside its training scale - that is what makes the detected boxes
+    # miss the beginning of the text lines.
+    limit_side_len: 960
+    limit_type: max
+    max_side_limit: 4000
+    # Thresholds shipped with the PP-OCRv6 *_det inference.yml
+    thresh: 0.2
+    box_thresh: 0.45
+    unclip_ratio: 1.4
+  TextLineOrientation:
+    module_name: textline_orientation
+    model_name: PP-LCNet_x1_0_textline_ori
+    model_dir: null
+    batch_size: 6
+  TextRecognition:
+    module_name: text_recognition
+    model_name: PP-OCRv6_medium_rec
+    model_dir: null
+    batch_size: 6
+    score_thresh: 0.0

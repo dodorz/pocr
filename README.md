@@ -91,6 +91,39 @@ pocr --download-models --model-size all --download-dir cwd
 | `--pdf-scale` | PDF 渲染倍率（1.0–4.0） | `2.0` |
 | `--mkldnn` | 启用 oneDNN 加速（见下） | 关 |
 | `--cpu-threads` | CPU 线程数 | `8` |
+| `--det-limit-side-len N` | 检测输入尺寸上限（PP-OCRv6 建议 960） | `960` |
+| `--det-limit-type max\|min` | 检测尺寸限制类型 | `max` |
+| `--det-thresh F` | 检测二值化阈值 | `0.2` |
+| `--det-box-thresh F` | 检测框得分阈值 | `0.45` |
+| `--det-unclip-ratio F` | 检测框扩张比例 | `1.4` |
+| `--no-unwarp` | 关闭 UVDoc 文档矫正 | 关 |
+| `--no-textline-orientation` | 关闭文本行方向分类 | 关 |
+| `--debug-dir DIR` | 导出检测框与每行裁剪图（排查用） | 关 |
+
+### 行首字符丢失（每行开头少几个字）
+
+PP-OCRv6 的检测模型是在 640×640 的切片上训练出来的，即输入页面的长边应约为 960px。
+官方 cpp_infer 自带的 `OCR.yaml` 仍然是 PP-OCRv5 时代的参数（`limit_side_len: 64` /
+`limit_type: min`），会让检测模型直接跑在原图分辨率上，远超训练尺度，结果就是检测框
+只框住行内的一部分，行首字符被切掉。
+
+pocr 现在自带修正过的 `configs\OCR.yaml`（`limit_side_len: 960` / `limit_type: max`，
+阈值取 PP-OCRv6 模型自带的 `0.2 / 0.45 / 1.4`）。如果仍有截断，可用下面的方法定位：
+
+```bat
+pocr image.png --debug-dir dbg        :: 导出每行裁剪图 + 坐标/文本 tsv
+```
+
+- 裁剪图里已经没有行首字符 → 问题在检测（调 `--det-limit-side-len` / `--det-thresh` /
+  `--det-box-thresh` / `--det-unclip-ratio`）
+- 裁剪图完整但文本缺字 → 问题在识别（换 `--model medium` 试试）
+
+也可以直接关掉文档矫正再看：
+
+```bat
+pocr image.png --no-unwarp
+pocr image.png --no-textline-orientation
+```
 
 ## 项目结构
 
@@ -101,7 +134,8 @@ pocr/
 │   ├── main.cpp            # CLI 入口：输入收集 / 输出 / 剪贴板调度
 │   ├── pdf_reader.*        # PDFium 逐页渲染
 │   └── clipboard.*         # Win32 剪贴板（读图 / 写文本）
-├── vendor/ppocr_upstream/  # 官方 PaddleOCR cpp_infer（Apache-2.0，含两处补丁）
+├── vendor/ppocr_upstream/  # 官方 PaddleOCR cpp_infer（Apache-2.0，含三处补丁）
+├── configs/OCR.yaml        # pocr 自带的流水线配置（PP-OCRv6 检测参数）
 ├── scripts/                # fetch_deps / fetch_models / build
 ├── third_party/            # Paddle Inference / OpenCV / PDFium（构建期依赖）
 └── models/                 # PP-OCRv6 模型包
@@ -112,6 +146,7 @@ pocr/
 - **官方源码补丁（vendor/ 内，Apache-2.0 允许）**：
   1. `text_detection/predictor.cc`：`DetResizeForTest.resize_long` 对 PP-OCRv6 模型（yml 为 `null`）缺失导致崩溃，改为容错读取
   2. `ocr/result.h`：新增 `GetResult()` getter 暴露识别结果
+  3. `align-cpp-infer-with-paddlex`：与 PaddleX 参考实现对齐——文档矫正输出转成 RGB（检测/识别通道序一致）、检测模型不再二次交换通道；修复多图批量时识别结果写到错误图片（`results[l]` → `results[indices[l]]`）的问题
 - GitHub Release 发布时会按照版本号排序，取当前 tag 的上一个版本 tag，并用两者之间的全部 Git 提交生成 Release 正文；正文只包含提交标题和正文，不包含 Changelog 标题、提交之间的空行、commit hash 和日期，也不会写入构建目录或发布包。
 - **模型目录**：程序依次查找 `pocr.exe` 同级的 `models\`、`%LOCALAPPDATA%\pocr\models\` 和当前工作目录的 `models\`。也可用 `--models-dir DIR` 指定任意位置。若默认位置都没有模型，程序会先让用户选择 `tiny` / `small` / `medium`，再询问是否下载到 `%LOCALAPPDATA%\pocr\models\`。如果通过 `--model` 或 `-M` 指定了档位，则直接按指定档位下载，不再重复询问。
 - 可执行文件同级的 `configs\OCR.yaml` 是运行必需的流水线配置。发布包已包含该文件；不要只复制 `pocr.exe` 和 DLL。如需自定义位置，可使用 `--pipeline-config <文件路径>`。

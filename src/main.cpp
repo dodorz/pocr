@@ -7,13 +7,17 @@
 #include <shellapi.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
@@ -27,6 +31,7 @@
 #include "src/api/pipelines/ocr.h"
 #include "src/pipelines/ocr/result.h"
 #include "src/utils/args.h"
+#include "src/utils/yaml_config.h"
 
 DEFINE_string(model, "small", "Model tier: tiny / small / medium.");
 DEFINE_string(models_dir, "models", "Root directory of OCR model packages.");
@@ -49,6 +54,30 @@ DEFINE_bool(clipboard, false,
             "Read image from clipboard instead of positional input.");
 DEFINE_bool(to_clipboard, false, "Write recognized text to clipboard.");
 DEFINE_double(pdf_scale, 2.0, "PDF page render scale (1.0-4.0).");
+
+// Text detection tuning. The defaults (0 / "" / negative) mean "keep whatever
+// the pipeline configuration says". PP-OCRv6 detection models expect the long
+// side of the page to be about 960px, otherwise the detector runs far outside
+// its training scale and the detected boxes lose the beginning of the lines.
+DEFINE_int(det_limit_side_len, 0,
+           "Text detection input size limit (0 = pipeline config, "
+           "PP-OCRv6 wants 960).");
+DEFINE_string(det_limit_type, "",
+              "Text detection size limit type: max / min "
+              "(empty = pipeline config).");
+DEFINE_double(det_thresh, -1.0,
+              "Text detection binarization threshold (<0 = pipeline config).");
+DEFINE_double(det_box_thresh, -1.0,
+              "Text detection box score threshold (<0 = pipeline config).");
+DEFINE_double(det_unclip_ratio, -1.0,
+              "Text detection box expansion ratio (<0 = pipeline config).");
+DEFINE_bool(no_unwarp, false,
+            "Disable the UVDoc document unwarping preprocessor.");
+DEFINE_bool(no_textline_orientation, false,
+            "Disable the text line orientation classifier.");
+DEFINE_string(debug_dir, "",
+              "Write the detected boxes and the cropped text lines into this "
+              "directory.");
 
 // Single-letter aliases
 DEFINE_bool(c, false, "Alias for --clipboard");
@@ -308,6 +337,85 @@ std::string ResolvePipelineConfig() {
   return {};
 }
 
+// Loads the pipeline YAML and applies the command line overrides. The result
+// is the flattened key/value map that the OCR pipeline understands.
+std::unordered_map<std::string, std::string> BuildPipelineConfig(
+    const std::string &config_path) {
+  YamlConfig config(config_path);
+  std::unordered_map<std::string, std::string> &data = config.Data();
+  auto set_value = [&data](const std::string &key, const std::string &value) {
+    auto it = data.find(key);
+    if (it != data.end()) {
+      it->second = value;
+    } else {
+      data[key] = value;
+    }
+  };
+
+  if (FLAGS_det_limit_side_len > 0) {
+    set_value("SubModules.TextDetection.limit_side_len",
+              std::to_string(FLAGS_det_limit_side_len));
+  }
+  if (!FLAGS_det_limit_type.empty()) {
+    set_value("SubModules.TextDetection.limit_type", FLAGS_det_limit_type);
+  }
+  if (FLAGS_det_thresh >= 0.0) {
+    set_value("SubModules.TextDetection.thresh", std::to_string(FLAGS_det_thresh));
+  }
+  if (FLAGS_det_box_thresh >= 0.0) {
+    set_value("SubModules.TextDetection.box_thresh",
+              std::to_string(FLAGS_det_box_thresh));
+  }
+  if (FLAGS_det_unclip_ratio >= 0.0) {
+    set_value("SubModules.TextDetection.unclip_ratio",
+              std::to_string(FLAGS_det_unclip_ratio));
+  }
+  if (FLAGS_no_unwarp) {
+    set_value("SubPipelines.DocPreprocessor.use_doc_unwarping", "False");
+  }
+  if (FLAGS_no_textline_orientation) {
+    set_value("use_textline_orientation", "False");
+  }
+  return data;
+}
+
+// Dumps the detected boxes together with the cropped text lines. This makes
+// it possible to tell whether characters are lost during detection (the crop
+// is already missing them) or during recognition.
+void DumpDebugOutput(const std::string &dir, const std::string &name,
+                      const OCRPipelineResult &res) {
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  if (ec) {
+    std::cerr << "[warn] pocr: cannot create debug directory: " << dir << "\n";
+    return;
+  }
+  const cv::Mat &image = res.doc_preprocessor_res.output_image;
+  if (image.empty()) return;
+
+  std::ostringstream table;
+  table << "index\tleft\ttop\tright\tbottom\tscore\ttext\n";
+  for (size_t i = 0; i < res.rec_boxes.size() && i < res.rec_texts.size(); ++i) {
+    const std::array<float, 4> &box = res.rec_boxes[i];
+    const int left = std::max(0, static_cast<int>(std::lround(box[0])));
+    const int top = std::max(0, static_cast<int>(std::lround(box[1])));
+    const int right = std::min(image.cols, static_cast<int>(std::lround(box[2])));
+    const int bottom = std::min(image.rows, static_cast<int>(std::lround(box[3])));
+    if (right <= left || bottom <= top) continue;
+    const cv::Mat crop =
+        image(cv::Rect(left, top, right - left, bottom - top)).clone();
+    const std::string file =
+        name + "_" + std::to_string(i) + "_" +
+        std::to_string(left) + "-" + std::to_string(top) + ".png";
+    cv::imwrite((fs::path(dir) / file).string(), crop);
+    table << i << "\t" << left << "\t" << top << "\t" << right << "\t" << bottom
+          << "\t" << (i < res.rec_scores.size() ? res.rec_scores[i] : 0.0f) << "\t"
+          << res.rec_texts[i] << "\n";
+  }
+  std::ofstream ofs((fs::path(dir) / (name + ".tsv")).string(), std::ios::binary);
+  if (ofs) ofs << table.str();
+}
+
 void PrintHelp() {
   std::cout
       << "pocr - local OCR command-line tool\n\n"
@@ -328,7 +436,16 @@ void PrintHelp() {
       << "  --clipboard                 Read an image from the clipboard\n"
       << "  --to-clipboard              Write recognized text to the clipboard\n"
       << "  --version                   Show version and exit\n"
-      << "  --mkldnn                    Enable oneDNN acceleration\n\n"
+      << "  --mkldnn                    Enable oneDNN acceleration\n"
+      << "  --det-limit-side-len N      Detection input size limit (0 = config, "
+         "PP-OCRv6 wants 960)\n"
+      << "  --det-limit-type max|min    Detection size limit type (default max)\n"
+      << "  --det-thresh F              Detection binarization threshold\n"
+      << "  --det-box-thresh F          Detection box score threshold\n"
+      << "  --det-unclip-ratio F        Detection box expansion ratio\n"
+      << "  --no-unwarp                 Disable the UVDoc unwarping preprocessor\n"
+      << "  --no-textline-orientation   Disable the text line orientation model\n"
+      << "  --debug-dir DIR             Dump detected boxes and cropped lines\n\n"
       << "Short options:\n"
       << "  -c  same as --clipboard\n"
       << "  -t  same as --to-clipboard\n"
@@ -461,7 +578,7 @@ void ExpandInputs(const std::vector<std::string> &raw_inputs,
     const std::string lower = ToLower(p.extension().string());
     if (lower == ".pdf") {
       std::vector<cv::Mat> pages;
-      if (!PdfRenderPages(raw, pages)) {
+      if (!PdfRenderPages(raw, FLAGS_pdf_scale, pages)) {
         std::cerr << "[warn] pocr: failed to open PDF: " << raw << "\n";
         continue;
       }
@@ -588,7 +705,7 @@ int main(int argc, char *argv[]) {
   PaddleOCRParams params = BuildParams(models_dir);
   const std::string pipeline_config = ResolvePipelineConfig();
   if (pipeline_config.empty()) return 1;
-  params.paddlex_config = pipeline_config;
+  params.paddlex_config = BuildPipelineConfig(pipeline_config);
   PaddleOCR ocr(params);
 
   // Batch predict all images (models loaded once)
@@ -609,7 +726,13 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < results.size() && i < images.size(); ++i) {
     auto *ocr_res = dynamic_cast<OCRResult *>(results[i].get());
     if (!ocr_res) continue;
-    items.push_back({display[i], ResultLines(ocr_res->GetResult())});
+    const OCRPipelineResult &res = ocr_res->GetResult();
+    items.push_back({display[i], ResultLines(res)});
+    if (!FLAGS_debug_dir.empty()) {
+      std::string name = fs::path(display[i]).stem().string();
+      if (name.empty()) name = "input";
+      DumpDebugOutput(FLAGS_debug_dir, name, res);
+    }
   }
 
   // Output

@@ -211,10 +211,17 @@ set(PCOR_BIN_DIR "$<TARGET_FILE_DIR:${DEMO_NAME}>")
 # The upstream C++ API resolves this from __FILE__, which is invalid after the
 # executable is packaged without the source tree. Keep a runtime copy next to
 # pocr.exe; src/main.cpp passes this path to PaddleOCR explicitly.
+# pocr ships its own copy of the pipeline config: the upstream one still holds
+# the PP-OCRv5 detection settings (limit_side_len 64 / limit_type min), which
+# make the PP-OCRv6 detector run far outside its training scale.
+set(PCOR_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/configs")
+if(NOT EXISTS "${PCOR_CONFIG_DIR}/OCR.yaml")
+  message(FATAL_ERROR "missing ${PCOR_CONFIG_DIR}/OCR.yaml")
+endif()
 add_custom_command(TARGET ${DEMO_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PCOR_BIN_DIR}/configs"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${PPOCR_CPP_INFER_DIR}/src/configs/OCR.yaml"
+        "${PCOR_CONFIG_DIR}/OCR.yaml"
         "${PCOR_BIN_DIR}/configs/OCR.yaml"
 )
 

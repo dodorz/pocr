@@ -1,0 +1,50 @@
+diff --git a/deploy/cpp_infer/src/modules/image_unwarping/processors.cc b/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
+index 14f0518..70dc322 100644
+--- a/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
++++ b/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
+@@ -66,6 +66,11 @@ absl::StatusOr<cv::Mat> DocTrPostProcess::Process(cv::Mat &pred_data) const {
+     item = item.reshape(1, shape_item);
+     item = item * scale_;
+   }
++  // The unwarped image is produced in BGR channel order; the reference
++  // implementation (PaddleX DocTrPostProcess) converts it to RGB before it is
++  // handed to the detection/recognition models.  Keep both in sync so that
++  // the models always see the same channel order as in PaddleOCR.
++  std::reverse(mat_split.begin(), mat_split.end());
+   cv::Mat out_hwc;
+   cv::merge(mat_split, out_hwc);
+   out_hwc.convertTo(out_hwc, CV_8U);
+diff --git a/deploy/cpp_infer/src/modules/text_detection/predictor.cc b/deploy/cpp_infer/src/modules/text_detection/predictor.cc
+index 0337f71..5bfbd26 100644
+--- a/deploy/cpp_infer/src/modules/text_detection/predictor.cc
++++ b/deploy/cpp_infer/src/modules/text_detection/predictor.cc
+@@ -33,7 +33,9 @@ TextDetPredictor::TextDetPredictor(const TextDetPredictorParams &params)
+ absl::Status TextDetPredictor::Build() {
+   const auto &pre_tfs = config_.PreProcessOpInfo();
+   // Register<ReadImage>("Read", pre_tfs.at("DecodeImage.img_mode"));
+-  Register<ReadImage>("Read");
++  // Keep the channel order of the incoming image: the doc preprocessor already
++  // returns the image in the order expected by the models (see PaddleX).
++  Register<ReadImage>("Read", "BGR");
+   DetResizeForTestParam resize_param;
+   resize_param.input_shape = params_.input_shape;
+   resize_param.max_side_limit = params_.max_side_limit;
+diff --git a/deploy/cpp_infer/src/pipelines/ocr/pipeline.cc b/deploy/cpp_infer/src/pipelines/ocr/pipeline.cc
+index 0678db7..10fe478 100644
+--- a/deploy/cpp_infer/src/pipelines/ocr/pipeline.cc
++++ b/deploy/cpp_infer/src/pipelines/ocr/pipeline.cc
+@@ -435,10 +435,10 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
+         for (int sno = 0; sno < sub_img_info_list.size(); sno++) {
+           auto rec_res = sub_img_info_list[sno].second;
+           if (rec_res.rec_score >= text_rec_score_thresh_) {
+-            results[l].rec_texts.push_back(rec_res.rec_text);
+-            results[l].rec_scores.push_back(rec_res.rec_score);
+-            results[l].rec_polys.push_back(dt_polys_list[l][sno]);
+-            results[l].vis_fonts = rec_res.vis_font;
++            results[indices[l]].rec_texts.push_back(rec_res.rec_text);
++            results[indices[l]].rec_scores.push_back(rec_res.rec_score);
++            results[indices[l]].rec_polys.push_back(dt_polys_list[indices[l]][sno]);
++            results[indices[l]].vis_fonts = rec_res.vis_font;
+           }
+         }
+       }

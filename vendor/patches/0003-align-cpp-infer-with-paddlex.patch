@@ -1,8 +1,16 @@
 diff --git a/deploy/cpp_infer/src/modules/image_unwarping/processors.cc b/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
-index 14f0518..70dc322 100644
+index 14f0518..1a0e591 100644
 --- a/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
 +++ b/deploy/cpp_infer/src/modules/image_unwarping/processors.cc
-@@ -66,6 +66,11 @@ absl::StatusOr<cv::Mat> DocTrPostProcess::Process(cv::Mat &pred_data) const {
+@@ -14,6 +14,7 @@
+ 
+ #include "processors.h"
+ 
++#include <algorithm>
+ #include <sstream>
+ #include <stdexcept>
+ 
+@@ -66,6 +67,11 @@ absl::StatusOr<cv::Mat> DocTrPostProcess::Process(cv::Mat &pred_data) const {
      item = item.reshape(1, shape_item);
      item = item * scale_;
    }
